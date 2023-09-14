@@ -8,9 +8,11 @@ import pandas as pd
 
 class DecisionTree:
 
-    def __init__(self):
+    def __init__(self, label=None, children=None):
         # NOTE: Feel free add any hyperparameters 
         # (with defaults) as you see fit
+        self.label = label
+        self.children = {}
         pass
 
     def fit(self, X, y):
@@ -25,37 +27,17 @@ class DecisionTree:
         """
 
         if len(y.unique()) == 1:
-            return y.iloc[0]
-
-
-
-    def find_split_feature(self, samples, results):
-        """
-        Args:
-            samples (pd.Dataframe):
-                observed values of the independants variables
-            results (pd.Serie :
-                observed value of the dependant variable for each sample
-        Returns:
-            the dataframe column that has the most information gain
-
-        Notes:
-            propably can be optimized by using better panda or numpy, here usage of 2 nested for loops
-        """
-        sample_count = samples.shape[0]
-        features_information_gain = pd.Series(index=samples.columns)
-
-        for feature in samples.columns:
-            features_information_gain[feature] = 0
-            possible_values, count = np.unique(samples[feature], return_counts=True)
-
-            for index, value in enumerate(possible_values):
-                results_given_value = results[samples[feature] == value].value_counts()
-                value_proba = count[index] / sample_count
-                features_information_gain[feature] -= entropy(results_given_value) * value_proba
-
-        features_information_gain = features_information_gain + entropy(results.value_counts())
-        return features_information_gain.idxmax()
+            self.label = y.iloc[0]
+            self.children = None
+            return
+        print("use information gain")
+        self.label = find_split_feature_ig(X, y)
+        child_names = X[self.label].unique()
+        for child in child_names:
+            kept_rows = X[self.label] == child
+            subtree = DecisionTree(child)
+            subtree.fit(X[kept_rows], y[kept_rows])
+            self.children[child] = subtree
 
     def predict(self, X):
         """
@@ -71,10 +53,20 @@ class DecisionTree:
         Returns:
             A length m vector with predictions
         """
-        # TODO: Implement 
-        raise NotImplementedError()
 
-    def get_rules(self):
+        if self.children is None:
+            return [self.label] * X.shape[0]
+        return pd.Series([self.predict_row(r[1]) for r in X.iterrows()])
+
+    def predict_row(self, row):
+        if self.children is None:
+            return self.label
+        if row[self.label] in self.children:
+            return self.children[row[self.label]].predict_row(row.drop(self.label))
+        else:
+            return "unknown"
+
+    def get_rules(self, previous_rule=None):
         """
         Returns the decision tree as a list of rules
         
@@ -92,11 +84,18 @@ class DecisionTree:
             ...
         ]
         """
-        # TODO: Implement
-        raise NotImplementedError()
+        if self.children is None:
+            return [(previous_rule, self.label)]
+        rules = []
+        for feature_value in self.children.keys():
+            current_rule = [(self.label, feature_value)]
+            if previous_rule is not None:
+                current_rule = previous_rule + current_rule
+            rules += self.children[feature_value].get_rules(current_rule)
+        return rules
 
 
-# --- Some utility functions 
+# --- Some utility functions
 
 def accuracy(y_true, y_pred):
     """
@@ -110,7 +109,7 @@ def accuracy(y_true, y_pred):
         The average number of correct predictions
     """
     assert y_true.shape == y_pred.shape
-    return (y_true == y_pred).mean()
+    return (y_true.values == y_pred.values).mean()
 
 
 def entropy(counts):
@@ -134,3 +133,65 @@ def entropy(counts):
     probs = counts / counts.sum()
     probs = probs[probs > 0]  # Avoid log(0)
     return - np.sum(probs * np.log2(probs))
+
+
+def find_split_feature_ig(samples, results):
+    """
+    Args:
+        samples (pd.Dataframe):
+            observed values of the independants variables
+        results (pd.Serie :
+            observed value of the dependant variable for each sample
+    Returns:
+        the dataframe column that has the most information gain
+
+    Notes:
+        propably can be optimized by using better panda or numpy, here usage of 2 nested for loops
+    """
+    sample_count = samples.shape[0]
+    features_information_gain = pd.Series(index=samples.columns)
+
+    for feature in samples.columns:
+        features_information_gain[feature] = 0
+        possible_values, count = np.unique(samples[feature], return_counts=True)
+
+        for index, value in enumerate(possible_values):
+            results_given_value = results[samples[feature] == value].value_counts()
+            value_proba = count[index] / sample_count
+            features_information_gain[feature] -= entropy(results_given_value) * value_proba
+
+    features_information_gain = features_information_gain + entropy(results.value_counts())
+    return features_information_gain.idxmax()
+
+
+def find_split_feature_gr(samples, results):
+    """
+    find the plit feature in the dataset according to the highest gain ratio (idea from 1986 quinlan)
+    Args:
+        samples (pd.Dataframe):
+            observed values of the independants variables
+        results (pd.Serie :
+            observed value of the dependant variable for each sample
+    Returns:
+        the dataframe column that has the most information gain
+
+    Notes:
+        propably can be optimized by using better panda or numpy, here usage of 2 nested for loops
+    """
+    sample_count = samples.shape[0]
+    features_gain_ratio = pd.Series(index=samples.columns)
+
+    for feature in samples.columns:
+        features_gain_ratio[feature] = 0
+        feature_split_information = 0
+        possible_values, count = np.unique(samples[feature], return_counts=True)
+
+        for index, value in enumerate(possible_values):
+            results_given_value = results[samples[feature] == value].value_counts()
+            value_proba = count[index] / sample_count
+            feature_split_information -= value_proba * np.log2(value_proba)
+            features_gain_ratio[feature] -= entropy(results_given_value) * value_proba
+        features_gain_ratio[feature] /= feature_split_information
+    features_gain_ratio = features_gain_ratio + entropy(results.value_counts())
+    features_gain_ratio = features_gain_ratio
+    return features_gain_ratio.idxmax()
