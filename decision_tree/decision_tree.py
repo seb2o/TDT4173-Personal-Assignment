@@ -178,18 +178,19 @@ def find_split_feature_gr(samples, results):
         propably can be optimized by using better panda or numpy, here usage of 2 nested for loops
     """
     sample_count = samples.shape[0]
-    features_gain_ratio = pd.Series(index=samples.columns)
+    results_entropy = entropy(results.value_counts())
+    information_gain = pd.Series(index=samples.columns)
 
     for feature in samples.columns:
-        features_gain_ratio[feature] = entropy(results.value_counts())
+        information_gain[feature] = results_entropy
         feature_split_information = 0
-        possible_values, count = np.unique(samples[feature], return_counts=True)
+        feature_values, count = np.unique(samples[feature], return_counts=True)
 
-        for index, value in enumerate(possible_values):
+        for index, value in enumerate(feature_values):
             results_given_value = results[samples[feature] == value].value_counts()
-            value_proba = count[index] / sample_count
-            feature_split_information -= value_proba * np.log2(value_proba)
-            features_gain_ratio[feature] -= entropy(results_given_value) * value_proba
-        print(feature_split_information)
-        features_gain_ratio[feature] /= feature_split_information
-    return features_gain_ratio.idxmax()
+            value_probability = count[index] / sample_count
+            # feature_split_information -= value_probability * np.log2(value_probability)
+            information_gain[feature] -= entropy(results_given_value) * value_probability
+        if feature_split_information > 0:
+            information_gain[feature] /= feature_split_information
+    return information_gain.idxmax()
