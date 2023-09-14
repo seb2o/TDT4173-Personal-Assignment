@@ -30,8 +30,7 @@ class DecisionTree:
             self.label = y.iloc[0]
             self.children = None
             return
-        print("use information gain")
-        self.label = find_split_feature_ig(X, y)
+        self.label = find_split_feature_gr(X, y)
         child_names = X[self.label].unique()
         for child in child_names:
             kept_rows = X[self.label] == child
@@ -182,7 +181,7 @@ def find_split_feature_gr(samples, results):
     features_gain_ratio = pd.Series(index=samples.columns)
 
     for feature in samples.columns:
-        features_gain_ratio[feature] = 0
+        features_gain_ratio[feature] = entropy(results.value_counts())
         feature_split_information = 0
         possible_values, count = np.unique(samples[feature], return_counts=True)
 
@@ -191,7 +190,6 @@ def find_split_feature_gr(samples, results):
             value_proba = count[index] / sample_count
             feature_split_information -= value_proba * np.log2(value_proba)
             features_gain_ratio[feature] -= entropy(results_given_value) * value_proba
+        print(feature_split_information)
         features_gain_ratio[feature] /= feature_split_information
-    features_gain_ratio = features_gain_ratio + entropy(results.value_counts())
-    features_gain_ratio = features_gain_ratio
     return features_gain_ratio.idxmax()
