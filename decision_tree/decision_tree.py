@@ -151,6 +151,7 @@ def entropy(counts):
 
 def find_split_feature_ig(samples, results):
     """
+    deprecated dont use this it wont work but i keep it as reference of how i got to the correct split function
     Args:
         samples (pd.Dataframe):
             observed values of the independants variables
