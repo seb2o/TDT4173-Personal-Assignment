@@ -8,11 +8,12 @@ import pandas as pd
 
 class DecisionTree:
 
-    def __init__(self, label=None, children=None):
+    def __init__(self, label=None, children=None, ignored_feature=None):
         # NOTE: Feel free add any hyperparameters 
         # (with defaults) as you see fit
         self.label = label
         self.children = {}
+        self.ignored_feature = ignored_feature
         pass
 
     def fit(self, X, y):
@@ -26,17 +27,31 @@ class DecisionTree:
             y (pd.Series): a vector of discrete ground-truth labels
         """
 
-        if len(y.unique()) == 1:
-            self.label = y.iloc[0]
-            self.children = None
-            return
-        self.label = find_split_feature_gr(X, y)
-        child_names = X[self.label].unique()
-        for child in child_names:
-            kept_rows = X[self.label] == child
-            subtree = DecisionTree(child)
+        if self.ignored_feature is not None and self.ignored_feature in X.columns:
+            X = X.drop(columns=self.ignored_feature)
+
+
+        flag = True
+        split_feature_classes = None
+
+        while flag:
+            # get the best feature to split on and its possible values
+            self.label, split_feature_classes = find_split_feature_gr(X, y)
+            # if the split feature has no children then its a leaf
+            if split_feature_classes is None:
+                self.children = None
+                return
+            flag = False
+            # if the split feature only has one child it becomes irrelevant and we can remove it and we look for new one
+            if len(split_feature_classes) == 1:
+                X = X.drop(columns=self.label)
+                flag = True
+
+        for value in split_feature_classes:
+            kept_rows = X[self.label] == value
+            subtree = DecisionTree(value)
             subtree.fit(X[kept_rows], y[kept_rows])
-            self.children[child] = subtree
+            self.children[value] = subtree
 
     def predict(self, X):
         """
@@ -177,7 +192,16 @@ def find_split_feature_gr(samples, results):
     Notes:
         propably can be optimized by using better panda or numpy, here usage of 2 nested for loops
     """
+
+    if len(np.unique(results)) == 1:
+        return results.iloc[0], None
+
     sample_count = samples.shape[0]
+    features_count = samples.shape[1]
+
+    if features_count == 0:
+        return results.mode().unique()[0], None
+
     results_entropy = entropy(results.value_counts())
     information_gain = pd.Series(index=samples.columns)
 
@@ -193,5 +217,6 @@ def find_split_feature_gr(samples, results):
             information_gain[feature] -= entropy(results_given_value) * value_probability
         if feature_split_information > 0:
             information_gain[feature] /= feature_split_information
-    print(information_gain)
-    return information_gain.idxmax()
+    split_feature = information_gain.idxmax()
+
+    return split_feature, np.unique(samples[split_feature])
