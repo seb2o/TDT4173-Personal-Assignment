@@ -189,8 +189,9 @@ def find_split_feature_gr(samples, results):
         for index, value in enumerate(feature_values):
             results_given_value = results[samples[feature] == value].value_counts()
             value_probability = count[index] / sample_count
-            # feature_split_information -= value_probability * np.log2(value_probability)
+            feature_split_information -= value_probability * np.log2(value_probability)
             information_gain[feature] -= entropy(results_given_value) * value_probability
         if feature_split_information > 0:
             information_gain[feature] /= feature_split_information
+    print(information_gain)
     return information_gain.idxmax()
