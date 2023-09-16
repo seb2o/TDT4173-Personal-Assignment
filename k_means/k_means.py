@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+from matplotlib import pyplot as plt
+import seaborn as sns
 
 
 # IMPORTANT: DO NOT USE ANY OTHER 3RD PARTY PACKAGES
@@ -8,11 +10,12 @@ import pandas as pd
 
 class KMeans:
 
-    def __init__(self, k=2):
+    def __init__(self, k=2, tol=1e-4):
         # NOTE: Feel free add any hyperparameters 
         # (with defaults) as you see fit
         self.k = k
-        self.centroids_coordinates = np.empty((self.k,))
+        self.centroids = np.empty((self.k,))
+        self.tol = tol
 
     def fit(self, X):
         """
@@ -25,28 +28,48 @@ class KMeans:
 
         # if there are more centroids than samples simply set the centroids list as the samples list
         if X.shape[0] <= self.k:
-            self.centroids_coordinates = X.to_numpy()
+            self.centroids = X.to_numpy()
             return
 
         # define arbitrarily k centroids
-        self.centroids_coordinates = X.iloc[:self.k].to_numpy()
+        self.centroids = X.sample(n=self.k).to_numpy()
 
-        # array which for each sample contains the index of the closest centroid, in the centroid list of the class
-        centroids_assignations = np.zeros(X.shape[0], dtype=int)
+        previous_error = self.tol + 1
+        new_error = 0
+        # loop until convergence
+        while abs(previous_error - new_error) > self.tol:
+            # step 1 : find the closest centroid for each point
 
-        for sample_index, row in X.iterrows():
-            min_dist = euclidean_distance(row, self.centroids_coordinates[0])
-            closest_centroid = 0
-            for id_centroid, centroid in enumerate(self.centroids_coordinates[1:], start=1):
-                dist = euclidean_distance(row, centroid)
-                if dist < min_dist:
-                    min_dist = dist
-                    closest_centroid = id_centroid
-            centroids_assignations[sample_index] = closest_centroid
+            # array which for each sample contains the index of the closest centroid, in the centroid list of the class
+            centroids_assignations = np.zeros(X.shape[0], dtype=int)
 
+            # new_error becomes previous error
+            previous_error = new_error
+            new_error = 0
 
-        # for each cluster compute the centroid
-        # do it again until the centroids distance from himself doesnt change
+            for sample_index, row in X.iterrows():
+                min_dist = euclidean_distance(row, self.centroids[0])
+                closest_centroid = 0
+                for id_centroid, centroid in enumerate(self.centroids[1:], start=1):
+                    dist = euclidean_distance(row, centroid)
+                    if dist < min_dist:
+                        min_dist = dist
+                        closest_centroid = id_centroid
+                new_error += min_dist
+                centroids_assignations[sample_index] = closest_centroid
+
+            # step 2 : for each cluster compute the centroid which is the mean of all points that have the same centroid
+
+            # k centroids, each of them has the same dimension as the samples
+            new_centroids = np.zeros((self.k, X.shape[1]))
+            cluster_point_count = np.zeros((self.k, 1))
+            for index, coordinates in X.iterrows():
+                point_centroid = centroids_assignations[index]
+                new_centroids[point_centroid] += coordinates
+                cluster_point_count[point_centroid] += 1
+
+            self.centroids = new_centroids / cluster_point_count
+
 
     def predict(self, X):
         """
@@ -64,6 +87,13 @@ class KMeans:
             there are 3 clusters, then a possible assignment
             could be: array([2, 0, 0, 1, 2, 1, 1, 0, 2, 2])
         """
+        X = X.apply(
+            lambda row:
+            np.argmin(
+                np.array(
+                    [euclidean_distance(row, centroid) for centroid in self.centroids])),
+            axis=1)
+        return X.to_numpy()
 
     def get_centroids(self):
         """
@@ -80,7 +110,7 @@ class KMeans:
             [xm_1, xm_2, ..., xm_n]
         ])
         """
-        pass
+        return self.centroids
 
 
 # --- Some utility functions 
@@ -134,7 +164,7 @@ def euclidean_distortion(X, z):
     for i, c in enumerate(clusters):
         Xc = X[z == c]
         mu = Xc.mean(axis=0)
-        distortion += ((Xc - mu) ** 2).sum(axis=1)
+        distortion += ((Xc - mu) ** 2).sum()
 
     return distortion
 
